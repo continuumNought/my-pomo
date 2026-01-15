@@ -1,7 +1,7 @@
 
 import asyncio
 from textual.app import App, ComposeResult
-from textual.widgets import Static
+from textual.widgets import Static, Button
 from pyfiglet import Figlet
 
 class PomoApp(App):
@@ -19,6 +19,11 @@ class PomoApp(App):
     }
     #timer.break {
         color: green;
+    }
+    #play-pause-button {
+        width: 100%;
+        text-align: center;
+        color: white;
     }
     """
 
@@ -38,16 +43,30 @@ class PomoApp(App):
         self.remaining_time = self.POMODORO_SEQUENCE[0][1]
         self._timer = None
         self.figlet = Figlet(font='big', justify='center')
+        self.is_paused = True
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         yield Static(id="timer")
+        yield Button("▶", id="play-pause-button")
 
     def on_mount(self) -> None:
         """Event handler called when the app is mounted."""
         self.update_timer_class()
         self.update_timer_display()
         self._timer = self.set_interval(1, self.tick)
+        self._timer.pause()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Event handler called when the button is pressed."""
+        if event.button.id == "play-pause-button":
+            if self.is_paused:
+                self._timer.resume()
+                event.button.label = "❚❚"
+            else:
+                self._timer.pause()
+                event.button.label = "▶"
+            self.is_paused = not self.is_paused
 
     def tick(self) -> None:
         """Called every second to update the timer."""
