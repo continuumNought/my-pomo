@@ -42,3 +42,10 @@ def get_all_timers():
     timers = conn.execute("SELECT * FROM timers").fetchall()
     conn.close()
     return timers
+
+def get_timer_by_id(timer_id):
+    conn = get_db_connection()
+    timer = conn.execute("SELECT * FROM timers WHERE id = ?", (timer_id,)).fetchone()
+    conn.close()
+    return timer
+

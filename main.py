@@ -5,7 +5,7 @@ from textual.screen import Screen
 from textual.widgets import Static, Button, Select, Input, Header, Footer
 from textual.validation import Integer
 from pyfiglet import Figlet
-from database import create_table, add_timer, get_all_timers
+from database import create_table, add_timer, get_all_timers, get_timer_by_id
 
 class TimerFormScreen(Screen):
     def compose(self) -> ComposeResult:
@@ -57,33 +57,45 @@ class PomoApp(App):
     }
     """
 
-    POMODORO_SEQUENCE = [
-        ("Pomodoro", 25 * 60),
-        ("Short Break", 5 * 60),
-        ("Pomodoro", 25 * 60),
-        ("Long Break", 10 * 60),
-        ("Pomodoro", 25 * 60),
-        ("Short Break", 5 * 60),
-        ("Pomodoro", 25 * 60),
-    ]
-
     def __init__(self):
         super().__init__()
         create_table()
         if not get_all_timers():
             add_timer("Pomodoro", 25, 5, 10, 4, 8)
         self.timers = get_all_timers()
+        self.current_timer_id = self.timers[0]['id'] if self.timers else None
+        self.POMODORO_SEQUENCE = self._generate_pomodoro_sequence(get_timer_by_id(self.current_timer_id)) if self.current_timer_id else []
         self.sequence_index = 0
-        self.remaining_time = self.POMODORO_SEQUENCE[0][1]
+        self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
         self._timer = None
         self.figlet = Figlet(font='big', justify='center')
         self.is_paused = True
+
+    def _generate_pomodoro_sequence(self, timer_data):
+        if not timer_data:
+            return []
+        session_len = timer_data['session_length'] * 60
+        short_break_len = timer_data['short_break'] * 60
+        long_break_len = timer_data['long_break'] * 60
+        short_per_long = timer_data['short_per_long']
+        total_sessions = timer_data['total_sessions']
+
+        sequence = []
+        sessions_done = 0
+        while sessions_done < total_sessions:
+            sequence.append(("Pomodoro", session_len))
+            sessions_done += 1
+            if sessions_done % short_per_long == 0 and sessions_done < total_sessions:
+                sequence.append(("Long Break", long_break_len))
+            elif sessions_done < total_sessions:
+                sequence.append(("Short Break", short_break_len))
+        return sequence
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         timers = [(timer['name'], timer['id']) for timer in self.timers]
         timers.append(("Add new timer...", "add_new_timer"))
-        yield Select(timers, id="timer-selector")
+        yield Select(timers, id="timer-selector", value=self.current_timer_id)
         yield Static(id="timer")
         yield Button("▶", id="play-pause-button")
 
@@ -97,6 +109,17 @@ class PomoApp(App):
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.value == "add_new_timer":
             self.push_screen(TimerFormScreen())
+        else:
+            self.current_timer_id = event.value
+            selected_timer_data = get_timer_by_id(self.current_timer_id)
+            self.POMODORO_SEQUENCE = self._generate_pomodoro_sequence(selected_timer_data)
+            self.sequence_index = 0
+            self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
+            self._timer.pause()
+            self.query_one("#play-pause-button", Button).label = "▶"
+            self.is_paused = True
+            self.update_timer_class()
+            self.update_timer_display()
 
     def add_new_timer(self, name, session_length, short_break, long_break, short_per_long, total_sessions):
         add_timer(name, int(session_length), int(short_break), int(long_break), int(short_per_long), int(total_sessions))
