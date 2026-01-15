@@ -3,6 +3,7 @@ import asyncio
 from textual.app import App, ComposeResult
 from textual.widgets import Static, Button, Select
 from pyfiglet import Figlet
+from database import create_table, add_timer, get_all_timers
 
 class PomoApp(App):
     """A basic Pomodoro timer app."""
@@ -43,6 +44,10 @@ class PomoApp(App):
 
     def __init__(self):
         super().__init__()
+        create_table()
+        if not get_all_timers():
+            add_timer("Pomodoro", 25, 5, 10, 4, 8)
+        self.timers = get_all_timers()
         self.sequence_index = 0
         self.remaining_time = self.POMODORO_SEQUENCE[0][1]
         self._timer = None
@@ -51,7 +56,7 @@ class PomoApp(App):
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
-        yield Select([("Pomodoro", "pomodoro")], id="timer-selector")
+        yield Select([(timer['name'], timer['id']) for timer in self.timers], id="timer-selector")
         yield Static(id="timer")
         yield Button("▶", id="play-pause-button")
 
