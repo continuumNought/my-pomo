@@ -1,7 +1,7 @@
 
 import asyncio
 from textual.app import App, ComposeResult
-from textual.widgets import Static, Button
+from textual.widgets import Static, Button, Select
 from pyfiglet import Figlet
 
 class PomoApp(App):
@@ -25,6 +25,10 @@ class PomoApp(App):
         text-align: center;
         color: white;
     }
+    #timer-selector {
+        width: 100%;
+        margin-bottom: 1;
+    }
     """
 
     POMODORO_SEQUENCE = [
@@ -47,6 +51,7 @@ class PomoApp(App):
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
+        yield Select([("Pomodoro", "pomodoro")], id="timer-selector")
         yield Static(id="timer")
         yield Button("▶", id="play-pause-button")
 
