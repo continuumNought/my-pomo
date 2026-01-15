@@ -2,6 +2,7 @@
 import asyncio
 from textual.app import App, ComposeResult
 from textual.widgets import Static
+from pyfiglet import Figlet
 
 class PomoApp(App):
     """A basic Pomodoro timer app."""
@@ -11,8 +12,13 @@ class PomoApp(App):
         align: center middle;
     }
     #timer {
-        border: thick $primary;
-        padding: 1 2;
+        padding: 0;
+    }
+    #timer.pomodoro {
+        color: yellow;
+    }
+    #timer.break {
+        color: green;
     }
     """
 
@@ -31,6 +37,7 @@ class PomoApp(App):
         self.sequence_index = 0
         self.remaining_time = self.POMODORO_SEQUENCE[0][1]
         self._timer = None
+        self.figlet = Figlet(font='big', justify='center')
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -38,6 +45,7 @@ class PomoApp(App):
 
     def on_mount(self) -> None:
         """Event handler called when the app is mounted."""
+        self.update_timer_class()
         self.update_timer_display()
         self._timer = self.set_interval(1, self.tick)
 
@@ -48,19 +56,32 @@ class PomoApp(App):
             self.sequence_index += 1
             if self.sequence_index < len(self.POMODORO_SEQUENCE):
                 self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
+                self.update_timer_class()
             else:
                 self._timer.stop()
                 self.exit()
                 return
         self.update_timer_display()
 
+    def update_timer_class(self) -> None:
+        """Update the timer's CSS class based on the current session."""
+        name, _ = self.POMODORO_SEQUENCE[self.sequence_index]
+        timer = self.query_one("#timer")
+        if "Break" in name:
+            timer.remove_class("pomodoro")
+            timer.add_class("break")
+        else:
+            timer.remove_class("break")
+            timer.add_class("pomodoro")
+
     def update_timer_display(self) -> None:
         """Update the timer display."""
         if self.sequence_index < len(self.POMODORO_SEQUENCE):
             name, _ = self.POMODORO_SEQUENCE[self.sequence_index]
             minutes, seconds = divmod(self.remaining_time, 60)
-            timer_str = f"{name}: {minutes:02d}:{seconds:02d}"
-            self.query_one("#timer", Static).update(timer_str)
+            timer_str = f"{minutes:02d}:{seconds:02d}"
+            self.figlet.width = self.console.width
+            self.query_one("#timer", Static).update(self.figlet.renderText(timer_str))
 
 if __name__ == "__main__":
     app = PomoApp()
