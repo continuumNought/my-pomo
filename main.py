@@ -13,6 +13,7 @@ class SessionLogScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header("Session Log")
         yield DataTable()
+        yield Button("Back", id="back")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -21,6 +22,10 @@ class SessionLogScreen(Screen):
         sessions = get_all_sessions()
         for session in sessions:
             table.add_row(session['id'], session['timer_id'], session['start_timestamp'], session['stop_timestamp'], session['sessions_completed'], session['short_breaks_completed'], session['long_breaks_completed'])
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "back":
+            self.app.pop_screen()
 
 class TimerFormScreen(Screen):
     def compose(self) -> ComposeResult:
