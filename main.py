@@ -59,6 +59,7 @@ class PomoApp(App):
     }
     #timer {
         padding: 0;
+        margin-top: 8;
     }
     #timer.pomodoro {
         color: yellow;
