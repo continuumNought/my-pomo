@@ -8,6 +8,7 @@ from textual.widgets import Static, Button, Select, Input, Header, Footer, DataT
 from textual.validation import Integer
 from pyfiglet import Figlet
 from database import create_tables, add_timer, get_all_timers, get_timer_by_id, create_session, update_session, get_all_sessions
+from playsound3 import playsound # type: ignore
 
 class SessionLogScreen(Screen):
     def compose(self) -> ComposeResult:
@@ -98,7 +99,7 @@ class PomoApp(App):
         session_len = timer_data['session_length'] * 60
         short_break_len = timer_data['short_break'] * 60
         long_break_len = timer_data['long_break'] * 60
-        short_per_long = timer_data['short_per_long']
+        short_per_long = timer_data['short_per_long'] + 1
         total_sessions = timer_data['total_sessions']
 
         sequence = []
@@ -196,6 +197,8 @@ class PomoApp(App):
         """Called every second to update the timer."""
         self.remaining_time -= 1
         if self.remaining_time < 0:
+            # User needs to provide a 'session_end.wav' file in the project root for sound to play.
+            playsound('./meow.mp3')
             self.sequence_index += 1
             if self.sequence_index < len(self.POMODORO_SEQUENCE):
                 self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
