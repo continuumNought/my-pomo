@@ -120,10 +120,10 @@ class PomoApp(App):
         yield Select(timers, id="timer-selector", value=self.current_timer_id)
         yield Static(id="timer")
         with Horizontal(id="buttons-container"):
-            yield Button("▶", id="play-pause-button")
+            yield Button("▶️", id="play-pause-button")
             yield Button("⏩", id="fast-forward-button")
             yield Button("🔄", id="restart-button")
-            yield Button("⚙", id="settings-button")
+            yield Button("⚙️", id="settings-button")
 
     def on_mount(self) -> None:
         """Event handler called when the app is mounted."""
@@ -145,7 +145,7 @@ class PomoApp(App):
             self.sequence_index = 0
             self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
             self._timer.pause()
-            self.query_one("#play-pause-button", Button).label = "▶"
+            self.query_one("#play-pause-button", Button).label = "▶️"
             self.is_paused = True
             self.update_timer_class()
             self.update_timer_display()
@@ -178,7 +178,7 @@ class PomoApp(App):
         if event.button.id == "play-pause-button":
             if self.is_paused:
                 self._timer.resume()
-                event.button.label = "❚❚"
+                event.button.label = "⏸️"
                 if self.current_session_id is None:
                     self.current_session_id = create_session(self.current_timer_id)
                 else:
@@ -186,7 +186,7 @@ class PomoApp(App):
                     update_session(self.current_session_id, None, sessions, short_breaks, long_breaks)
             else:
                 self._timer.pause()
-                event.button.label = "▶"
+                event.button.label = "▶️"
                 sessions, short_breaks, long_breaks = self._get_completed_counts()
                 stop_time = datetime.datetime.now().isoformat()
                 update_session(self.current_session_id, stop_time, sessions, short_breaks, long_breaks)
@@ -203,7 +203,7 @@ class PomoApp(App):
         """Resets the current timer to its starting state."""
         self._timer.pause()
         self.is_paused = True
-        self.query_one("#play-pause-button", Button).label = "▶"
+        self.query_one("#play-pause-button", Button).label = "▶️"
         self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
         self.update_timer_display()
 
@@ -231,7 +231,7 @@ class PomoApp(App):
             self.sequence_index = 0
             self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
             self.is_paused = True
-            self.query_one("#play-pause-button", Button).label = "▶"
+            self.query_one("#play-pause-button", Button).label = "▶️"
             self.current_session_id = None
             self.update_timer_class()
             self.update_timer_display()
