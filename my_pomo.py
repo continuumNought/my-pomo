@@ -121,6 +121,7 @@ class PomoApp(App):
         yield Static(id="timer")
         with Horizontal(id="buttons-container"):
             yield Button("▶", id="play-pause-button")
+            yield Button("▶▶", id="fast-forward-button")
             yield Button("⚙", id="settings-button")
 
     def on_mount(self) -> None:
@@ -189,27 +190,40 @@ class PomoApp(App):
                 stop_time = datetime.datetime.now().isoformat()
                 update_session(self.current_session_id, stop_time, sessions, short_breaks, long_breaks)
             self.is_paused = not self.is_paused
+        elif event.button.id == "fast-forward-button":
+            self.skip_session()
         elif event.button.id == "settings-button":
             self.push_screen(SessionLogScreen())
+
+
+    def skip_session(self, play_sound: bool = False):
+        """Skips the current session."""
+        if play_sound:
+            # User needs to provide a 'session_end.wav' file in the project root for sound to play.
+            playsound('./meow.mp3')
+        self.sequence_index += 1
+        if self.sequence_index < len(self.POMODORO_SEQUENCE):
+            self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
+            self.update_timer_class()
+            if self.current_session_id is not None:
+                sessions, short_breaks, long_breaks = self._get_completed_counts()
+                update_session(self.current_session_id, None, sessions, short_breaks, long_breaks)
+            self.update_timer_display()
+        else:
+            self._timer.stop()
+            if self.current_session_id is not None:
+                sessions, short_breaks, long_breaks = self._get_completed_counts()
+                stop_time = datetime.datetime.now().isoformat()
+                update_session(self.current_session_id, stop_time, sessions, short_breaks, long_breaks)
+            self.exit()
 
 
     def tick(self) -> None:
         """Called every second to update the timer."""
         self.remaining_time -= 1
         if self.remaining_time < 0:
-            # User needs to provide a 'session_end.wav' file in the project root for sound to play.
-            playsound('./meow.mp3')
-            self.sequence_index += 1
-            if self.sequence_index < len(self.POMODORO_SEQUENCE):
-                self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
-                self.update_timer_class()
-            else:
-                self._timer.stop()
-                sessions, short_breaks, long_breaks = self._get_completed_counts()
-                stop_time = datetime.datetime.now().isoformat()
-                update_session(self.current_session_id, stop_time, sessions, short_breaks, long_breaks)
-                self.exit()
-                return
+            self.skip_session(play_sound=True)
+            return
         self.update_timer_display()
 
     def update_timer_class(self) -> None:
