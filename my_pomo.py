@@ -121,7 +121,8 @@ class PomoApp(App):
         yield Static(id="timer")
         with Horizontal(id="buttons-container"):
             yield Button("▶", id="play-pause-button")
-            yield Button("▶▶", id="fast-forward-button")
+            yield Button("⏩", id="fast-forward-button")
+            yield Button("🔄", id="restart-button")
             yield Button("⚙", id="settings-button")
 
     def on_mount(self) -> None:
@@ -192,8 +193,19 @@ class PomoApp(App):
             self.is_paused = not self.is_paused
         elif event.button.id == "fast-forward-button":
             self.skip_session()
+        elif event.button.id == "restart-button":
+            self.restart_current_timer()
         elif event.button.id == "settings-button":
             self.push_screen(SessionLogScreen())
+
+
+    def restart_current_timer(self):
+        """Resets the current timer to its starting state."""
+        self._timer.pause()
+        self.is_paused = True
+        self.query_one("#play-pause-button", Button).label = "▶"
+        self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
+        self.update_timer_display()
 
 
     def skip_session(self, play_sound: bool = False):
