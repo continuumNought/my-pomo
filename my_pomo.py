@@ -210,12 +210,19 @@ class PomoApp(App):
                 update_session(self.current_session_id, None, sessions, short_breaks, long_breaks)
             self.update_timer_display()
         else:
-            self._timer.stop()
+            self._timer.pause()
             if self.current_session_id is not None:
                 sessions, short_breaks, long_breaks = self._get_completed_counts()
                 stop_time = datetime.datetime.now().isoformat()
                 update_session(self.current_session_id, stop_time, sessions, short_breaks, long_breaks)
-            self.exit()
+
+            self.sequence_index = 0
+            self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
+            self.is_paused = True
+            self.query_one("#play-pause-button", Button).label = "▶"
+            self.current_session_id = None
+            self.update_timer_class()
+            self.update_timer_display()
 
 
     def tick(self) -> None:
