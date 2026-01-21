@@ -204,7 +204,10 @@ class PomoApp(App):
         self._timer.pause()
         self.is_paused = True
         self.query_one("#play-pause-button", Button).label = "▶️"
+        self.sequence_index = 0
+        self.current_session_id = None
         self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
+        self.update_timer_class()
         self.update_timer_display()
 
 
