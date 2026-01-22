@@ -1,13 +1,14 @@
 
 import asyncio
 import datetime
+from typing import Optional
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.containers import Horizontal
 from textual.widgets import Static, Button, Select, Input, Header, Footer, DataTable
 from textual.validation import Integer
 from pyfiglet import Figlet
-from database import create_tables, add_timer, get_all_timers, get_timer_by_id, create_session, update_session, get_all_sessions
+from database import create_tables, add_timer, get_all_timers, get_timer_by_id, create_session, update_session, get_all_sessions, update_timer, delete_timer
 from playsound3 import playsound # type: ignore
 
 class SessionLogScreen(Screen):
@@ -49,6 +50,44 @@ class TimerFormScreen(Screen):
             short_per_long = self.query_one("#short_per_long", Input).value
             total_sessions = self.query_one("#total_sessions", Input).value
             self.app.add_new_timer(name, session_length, short_break, long_break, short_per_long, total_sessions)
+
+
+class EditTimerScreen(Screen):
+    def __init__(self, timer_id: int) -> None:
+        super().__init__()
+        self.timer_id = timer_id
+        self.timer_data = get_timer_by_id(self.timer_id)
+
+    def compose(self) -> ComposeResult:
+        yield Header(f"Edit Timer: {self.timer_data['name']}")
+        yield Input(value=self.timer_data['name'], id="name")
+        yield Input(value=str(self.timer_data['session_length']), id="session_length", validators=[Integer()])
+        yield Input(value=str(self.timer_data['short_break']), id="short_break", validators=[Integer()])
+        yield Input(value=str(self.timer_data['long_break']), id="long_break", validators=[Integer()])
+        yield Input(value=str(self.timer_data['short_per_long']), id="short_per_long", validators=[Integer()])
+        yield Input(value=str(self.timer_data['total_sessions']), id="total_sessions", validators=[Integer()])
+        yield Button("Save", id="save_timer")
+        yield Button("Delete", id="delete_timer", variant="error")
+        yield Button("Back", id="back")
+        yield Footer()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "save_timer":
+            name = self.query_one("#name", Input).value
+            session_length = self.query_one("#session_length", Input).value
+            short_break = self.query_one("#short_break", Input).value
+            long_break = self.query_one("#long_break", Input).value
+            short_per_long = self.query_one("#short_per_long", Input).value
+            total_sessions = self.query_one("#total_sessions", Input).value
+            update_timer(self.timer_id, name, int(session_length), int(short_break), int(long_break), int(short_per_long), int(total_sessions))
+            self.app.refresh_timers()
+            self.app.pop_screen()
+        elif event.button.id == "delete_timer":
+            delete_timer(self.timer_id)
+            self.app.refresh_timers(new_current_timer_id=None)
+            self.app.pop_screen()
+        elif event.button.id == "back":
+            self.app.pop_screen()
 
 
 class PomoApp(App):
@@ -124,6 +163,7 @@ class PomoApp(App):
             yield Button("⏩", id="fast-forward-button")
             yield Button("🔄", id="restart-button")
             yield Button("⚙️", id="settings-button")
+            yield Button("✏️", id="edit-timer-button")
 
     def on_mount(self) -> None:
         """Event handler called when the app is mounted."""
@@ -131,6 +171,34 @@ class PomoApp(App):
         self.update_timer_display()
         self._timer = self.set_interval(1, self.tick)
         self._timer.pause()
+
+    def refresh_timers(self, new_current_timer_id: Optional[int] = None) -> None:
+        """Refresh the timers in the select."""
+        self.timers = get_all_timers()
+        select = self.query_one(Select)
+        timers = [(timer['name'], timer['id']) for timer in self.timers]
+        timers.append(("Add new timer...", "add_new_timer"))
+        select.set_options(timers)
+        if new_current_timer_id is None:
+            if self.timers:
+                self.current_timer_id = self.timers[0]['id']
+            else:
+                self.current_timer_id = None
+        else:
+            self.current_timer_id = new_current_timer_id
+        
+        select.value = self.current_timer_id
+        
+        self.current_session_id = None # Reset session on timer change
+        selected_timer_data = get_timer_by_id(self.current_timer_id) if self.current_timer_id else None
+        self.POMODORO_SEQUENCE = self._generate_pomodoro_sequence(selected_timer_data)
+        self.sequence_index = 0
+        self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
+        self._timer.pause()
+        self.query_one("#play-pause-button", Button).label = "▶️"
+        self.is_paused = True
+        self.update_timer_class()
+        self.update_timer_display()
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.value == Select.BLANK:
@@ -152,11 +220,7 @@ class PomoApp(App):
 
     def add_new_timer(self, name, session_length, short_break, long_break, short_per_long, total_sessions):
         add_timer(name, int(session_length), int(short_break), int(long_break), int(short_per_long), int(total_sessions))
-        self.timers = get_all_timers()
-        select = self.query_one(Select)
-        timers = [(timer['name'], timer['id']) for timer in self.timers]
-        timers.append(("Add new timer...", "add_new_timer"))
-        select.set_options(timers)
+        self.refresh_timers()
         self.pop_screen()
 
     def _get_completed_counts(self):
@@ -197,6 +261,9 @@ class PomoApp(App):
             self.restart_current_timer()
         elif event.button.id == "settings-button":
             self.push_screen(SessionLogScreen())
+        elif event.button.id == "edit-timer-button":
+            if self.current_timer_id:
+                self.push_screen(EditTimerScreen(self.current_timer_id))
 
 
     def restart_current_timer(self):

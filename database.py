@@ -62,6 +62,29 @@ def get_timer_by_id(timer_id):
     conn.close()
     return timer
 
+def update_timer(timer_id, name, session_length, short_break, long_break, short_per_long, total_sessions):
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            UPDATE timers
+            SET name = ?,
+                session_length = ?,
+                short_break = ?,
+                long_break = ?,
+                short_per_long = ?,
+                total_sessions = ?
+            WHERE id = ?
+            """,
+            (name, session_length, short_break, long_break, short_per_long, total_sessions, timer_id)
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # Timer with this name already exists
+        pass
+    finally:
+        conn.close()
+
 def create_session(timer_id):
     conn = get_db_connection()
     start_time = datetime.datetime.now().isoformat()
@@ -87,6 +110,13 @@ def update_session(session_id, stop_timestamp, sessions_completed, short_breaks_
         """,
         (stop_timestamp, sessions_completed, short_breaks_completed, long_breaks_completed, session_id)
     )
+    conn.commit()
+    conn.close()
+
+def delete_timer(timer_id):
+    conn = get_db_connection()
+    conn.execute("DELETE FROM timers WHERE id = ?", (timer_id,))
+    conn.execute("DELETE FROM sessions WHERE timer_id = ?", (timer_id,))
     conn.commit()
     conn.close()
 
