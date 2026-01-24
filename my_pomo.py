@@ -66,9 +66,10 @@ class EditTimerScreen(Screen):
         yield Input(value=str(self.timer_data['long_break']), id="long_break", validators=[Integer()])
         yield Input(value=str(self.timer_data['short_per_long']), id="short_per_long", validators=[Integer()])
         yield Input(value=str(self.timer_data['total_sessions']), id="total_sessions", validators=[Integer()])
-        yield Button("Save", id="save_timer")
-        yield Button("Delete", id="delete_timer", variant="error")
-        yield Button("Back", id="back")
+        with Horizontal(id="buttons-container"):
+            yield Button("Save", id="save_timer")
+            yield Button("Delete", id="delete_timer", variant="error")
+            yield Button("Back", id="back")
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -80,7 +81,7 @@ class EditTimerScreen(Screen):
             short_per_long = self.query_one("#short_per_long", Input).value
             total_sessions = self.query_one("#total_sessions", Input).value
             update_timer(self.timer_id, name, int(session_length), int(short_break), int(long_break), int(short_per_long), int(total_sessions))
-            self.app.refresh_timers()
+            self.app.refresh_timers(self.timer_id)
             self.app.pop_screen()
         elif event.button.id == "delete_timer":
             delete_timer(self.timer_id)
