@@ -1,15 +1,30 @@
-
-import asyncio
 import datetime
+from importlib.resources import files
 from typing import Optional
+
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.containers import Horizontal
 from textual.widgets import Static, Button, Select, Input, Header, Footer, DataTable
 from textual.validation import Integer
 from pyfiglet import Figlet
-from database import create_tables, add_timer, get_all_timers, get_timer_by_id, create_session, update_session, get_all_sessions, update_timer, delete_timer
-from playsound3 import playsound # type: ignore
+from playsound3 import playsound  # type: ignore
+
+from my_pomo.database import (
+    create_tables,
+    add_timer,
+    get_all_timers,
+    get_timer_by_id,
+    create_session,
+    update_session,
+    get_all_sessions,
+    update_timer,
+    delete_timer,
+)
+
+# Get path to assets directory
+ASSETS_DIR = files("my_pomo").joinpath("assets")
+
 
 class SessionLogScreen(Screen):
     def compose(self) -> ComposeResult:
@@ -28,6 +43,7 @@ class SessionLogScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "back":
             self.app.pop_screen()
+
 
 class TimerFormScreen(Screen):
     def compose(self) -> ComposeResult:
@@ -187,10 +203,10 @@ class PomoApp(App):
                 self.current_timer_id = None
         else:
             self.current_timer_id = new_current_timer_id
-        
+
         select.value = self.current_timer_id
-        
-        self.current_session_id = None # Reset session on timer change
+
+        self.current_session_id = None  # Reset session on timer change
         selected_timer_data = get_timer_by_id(self.current_timer_id) if self.current_timer_id else None
         self.POMODORO_SEQUENCE = self._generate_pomodoro_sequence(selected_timer_data)
         self.sequence_index = 0
@@ -208,7 +224,7 @@ class PomoApp(App):
             self.push_screen(TimerFormScreen())
         else:
             self.current_timer_id = event.value
-            self.current_session_id = None # Reset session on timer change
+            self.current_session_id = None  # Reset session on timer change
             selected_timer_data = get_timer_by_id(self.current_timer_id)
             self.POMODORO_SEQUENCE = self._generate_pomodoro_sequence(selected_timer_data)
             self.sequence_index = 0
@@ -266,7 +282,6 @@ class PomoApp(App):
             if self.current_timer_id:
                 self.push_screen(EditTimerScreen(self.current_timer_id))
 
-
     def restart_current_timer(self):
         """Resets the current timer to its starting state."""
         self._timer.pause()
@@ -278,12 +293,11 @@ class PomoApp(App):
         self.update_timer_class()
         self.update_timer_display()
 
-
     def skip_session(self, play_sound: bool = False):
         """Skips the current session."""
         if play_sound:
-            # User needs to provide a 'session_end.wav' file in the project root for sound to play.
-            playsound('./meow.mp3')
+            sound_file = ASSETS_DIR / "meow.mp3"
+            playsound(str(sound_file))
         self.sequence_index += 1
         if self.sequence_index < len(self.POMODORO_SEQUENCE):
             self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
@@ -306,7 +320,6 @@ class PomoApp(App):
             self.current_session_id = None
             self.update_timer_class()
             self.update_timer_display()
-
 
     def tick(self) -> None:
         """Called every second to update the timer."""
@@ -335,7 +348,3 @@ class PomoApp(App):
             timer_str = f"{minutes:02d}:{seconds:02d}"
             self.figlet.width = self.console.width
             self.query_one("#timer", Static).update(self.figlet.renderText(timer_str))
-
-if __name__ == "__main__":
-    app = PomoApp()
-    app.run()

@@ -1,12 +1,21 @@
 import sqlite3
 import datetime
+from pathlib import Path
 
-DB_NAME = "timers.db"
+# Store database in user's data directory or alongside the package
+DB_NAME = Path.home() / ".my_pomo" / "timers.db"
+
+
+def _ensure_db_dir():
+    DB_NAME.parent.mkdir(parents=True, exist_ok=True)
+
 
 def get_db_connection():
+    _ensure_db_dir()
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def create_tables():
     conn = get_db_connection()
@@ -36,6 +45,7 @@ def create_tables():
     conn.commit()
     conn.close()
 
+
 def add_timer(name, session_length, short_break, long_break, short_per_long, total_sessions):
     conn = get_db_connection()
     try:
@@ -50,17 +60,20 @@ def add_timer(name, session_length, short_break, long_break, short_per_long, tot
     finally:
         conn.close()
 
+
 def get_all_timers():
     conn = get_db_connection()
     timers = conn.execute("SELECT * FROM timers").fetchall()
     conn.close()
     return timers
 
+
 def get_timer_by_id(timer_id):
     conn = get_db_connection()
     timer = conn.execute("SELECT * FROM timers WHERE id = ?", (timer_id,)).fetchone()
     conn.close()
     return timer
+
 
 def update_timer(timer_id, name, session_length, short_break, long_break, short_per_long, total_sessions):
     conn = get_db_connection()
@@ -85,6 +98,7 @@ def update_timer(timer_id, name, session_length, short_break, long_break, short_
     finally:
         conn.close()
 
+
 def create_session(timer_id):
     conn = get_db_connection()
     start_time = datetime.datetime.now().isoformat()
@@ -96,6 +110,7 @@ def create_session(timer_id):
     conn.commit()
     conn.close()
     return session_id
+
 
 def update_session(session_id, stop_timestamp, sessions_completed, short_breaks_completed, long_breaks_completed):
     conn = get_db_connection()
@@ -113,6 +128,7 @@ def update_session(session_id, stop_timestamp, sessions_completed, short_breaks_
     conn.commit()
     conn.close()
 
+
 def delete_timer(timer_id):
     conn = get_db_connection()
     conn.execute("DELETE FROM timers WHERE id = ?", (timer_id,))
@@ -120,9 +136,9 @@ def delete_timer(timer_id):
     conn.commit()
     conn.close()
 
+
 def get_all_sessions():
     conn = get_db_connection()
     sessions = conn.execute("SELECT * FROM sessions").fetchall()
     conn.close()
     return sessions
-
