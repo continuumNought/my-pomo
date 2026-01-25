@@ -1,5 +1,4 @@
 import datetime
-import threading
 from importlib.resources import files
 from typing import Optional
 
@@ -292,7 +291,7 @@ class PomoApp(App):
 
         if play_sound:
             sound_file = ASSETS_DIR / "meow.mp3"
-            threading.Thread(target=playsound, args=(str(sound_file),), daemon=True).start()
+            self.run_worker(lambda: playsound(str(sound_file)), exclusive=False, thread=True)
 
         has_more = self._pomo_timer.skip()
 
@@ -322,9 +321,9 @@ class PomoApp(App):
 
         phase_changed = self._pomo_timer.tick()
         if phase_changed:
-            # Play sound on phase change (in background thread to avoid blocking)
+            # Play sound on phase change (in background worker to avoid blocking)
             sound_file = ASSETS_DIR / "meow.mp3"
-            threading.Thread(target=playsound, args=(str(sound_file),), daemon=True).start()
+            self.run_worker(lambda: playsound(str(sound_file)), exclusive=False, thread=True)
 
             # Update session stats
             if self._current_session_id is not None:
