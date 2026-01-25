@@ -10,16 +10,11 @@ from textual.validation import Integer
 from pyfiglet import Figlet
 from playsound3 import playsound  # type: ignore
 
-from my_pomo.database import (
-    create_tables,
-    add_timer,
-    get_all_timers,
-    get_timer_by_id,
-    create_session,
-    update_session,
-    get_all_sessions,
-    update_timer,
-    delete_timer,
+from my_pomo.core import (
+    TimerConfig,
+    PomodoroTimer,
+    TimerRepository,
+    SessionRepository,
 )
 
 # Get path to assets directory
@@ -27,6 +22,10 @@ ASSETS_DIR = files("my_pomo").joinpath("assets")
 
 
 class SessionLogScreen(Screen):
+    def __init__(self, session_repo: SessionRepository) -> None:
+        super().__init__()
+        self._session_repo = session_repo
+
     def compose(self) -> ComposeResult:
         yield Header("Session Log")
         yield DataTable()
@@ -36,9 +35,17 @@ class SessionLogScreen(Screen):
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         table.add_columns("ID", "Timer ID", "Start", "Stop", "Sessions", "Short Breaks", "Long Breaks")
-        sessions = get_all_sessions()
+        sessions = self._session_repo.get_all()
         for session in sessions:
-            table.add_row(session['id'], session['timer_id'], session['start_timestamp'], session['stop_timestamp'], session['sessions_completed'], session['short_breaks_completed'], session['long_breaks_completed'])
+            table.add_row(
+                session["id"],
+                session["timer_id"],
+                session["start_timestamp"],
+                session["stop_timestamp"],
+                session["sessions_completed"],
+                session["short_breaks_completed"],
+                session["long_breaks_completed"],
+            )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "back":
@@ -46,6 +53,10 @@ class SessionLogScreen(Screen):
 
 
 class TimerFormScreen(Screen):
+    def __init__(self, timer_repo: TimerRepository) -> None:
+        super().__init__()
+        self._timer_repo = timer_repo
+
     def compose(self) -> ComposeResult:
         yield Header("Add New Timer")
         yield Input(placeholder="Timer Name", id="name")
@@ -60,28 +71,30 @@ class TimerFormScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "save_timer":
             name = self.query_one("#name", Input).value
-            session_length = self.query_one("#session_length", Input).value
-            short_break = self.query_one("#short_break", Input).value
-            long_break = self.query_one("#long_break", Input).value
-            short_per_long = self.query_one("#short_per_long", Input).value
-            total_sessions = self.query_one("#total_sessions", Input).value
-            self.app.add_new_timer(name, session_length, short_break, long_break, short_per_long, total_sessions)
+            session_length = int(self.query_one("#session_length", Input).value)
+            short_break = int(self.query_one("#short_break", Input).value)
+            long_break = int(self.query_one("#long_break", Input).value)
+            short_per_long = int(self.query_one("#short_per_long", Input).value)
+            total_sessions = int(self.query_one("#total_sessions", Input).value)
+            self._timer_repo.create(name, session_length, short_break, long_break, short_per_long, total_sessions)
+            self.app.refresh_timers()
+            self.app.pop_screen()
 
 
 class EditTimerScreen(Screen):
-    def __init__(self, timer_id: int) -> None:
+    def __init__(self, timer_config: TimerConfig, timer_repo: TimerRepository) -> None:
         super().__init__()
-        self.timer_id = timer_id
-        self.timer_data = get_timer_by_id(self.timer_id)
+        self._timer_config = timer_config
+        self._timer_repo = timer_repo
 
     def compose(self) -> ComposeResult:
-        yield Header(f"Edit Timer: {self.timer_data['name']}")
-        yield Input(value=self.timer_data['name'], id="name")
-        yield Input(value=str(self.timer_data['session_length']), id="session_length", validators=[Integer()])
-        yield Input(value=str(self.timer_data['short_break']), id="short_break", validators=[Integer()])
-        yield Input(value=str(self.timer_data['long_break']), id="long_break", validators=[Integer()])
-        yield Input(value=str(self.timer_data['short_per_long']), id="short_per_long", validators=[Integer()])
-        yield Input(value=str(self.timer_data['total_sessions']), id="total_sessions", validators=[Integer()])
+        yield Header(f"Edit Timer: {self._timer_config.name}")
+        yield Input(value=self._timer_config.name, id="name")
+        yield Input(value=str(self._timer_config.session_length), id="session_length", validators=[Integer()])
+        yield Input(value=str(self._timer_config.short_break), id="short_break", validators=[Integer()])
+        yield Input(value=str(self._timer_config.long_break), id="long_break", validators=[Integer()])
+        yield Input(value=str(self._timer_config.short_per_long), id="short_per_long", validators=[Integer()])
+        yield Input(value=str(self._timer_config.total_sessions), id="total_sessions", validators=[Integer()])
         with Horizontal(id="buttons-container"):
             yield Button("Save", id="save_timer")
             yield Button("Delete", id="delete_timer", variant="error")
@@ -90,17 +103,20 @@ class EditTimerScreen(Screen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "save_timer":
-            name = self.query_one("#name", Input).value
-            session_length = self.query_one("#session_length", Input).value
-            short_break = self.query_one("#short_break", Input).value
-            long_break = self.query_one("#long_break", Input).value
-            short_per_long = self.query_one("#short_per_long", Input).value
-            total_sessions = self.query_one("#total_sessions", Input).value
-            update_timer(self.timer_id, name, int(session_length), int(short_break), int(long_break), int(short_per_long), int(total_sessions))
-            self.app.refresh_timers(self.timer_id)
+            updated_config = TimerConfig(
+                id=self._timer_config.id,
+                name=self.query_one("#name", Input).value,
+                session_length=int(self.query_one("#session_length", Input).value),
+                short_break=int(self.query_one("#short_break", Input).value),
+                long_break=int(self.query_one("#long_break", Input).value),
+                short_per_long=int(self.query_one("#short_per_long", Input).value),
+                total_sessions=int(self.query_one("#total_sessions", Input).value),
+            )
+            self._timer_repo.update(updated_config)
+            self.app.refresh_timers(self._timer_config.id)
             self.app.pop_screen()
         elif event.button.id == "delete_timer":
-            delete_timer(self.timer_id)
+            self._timer_repo.delete(self._timer_config.id)
             self.app.refresh_timers(new_current_timer_id=None)
             self.app.pop_screen()
         elif event.button.id == "back":
@@ -136,215 +152,195 @@ class PomoApp(App):
 
     def __init__(self):
         super().__init__()
-        create_tables()
-        if not get_all_timers():
-            add_timer("Pomodoro", 25, 5, 10, 4, 8)
-        self.timers = get_all_timers()
-        self.current_timer_id = self.timers[0]['id'] if self.timers else None
-        self.current_session_id = None
-        self.POMODORO_SEQUENCE = self._generate_pomodoro_sequence(get_timer_by_id(self.current_timer_id)) if self.current_timer_id else []
-        self.sequence_index = 0
-        self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
-        self._timer = None
-        self.figlet = Figlet(font='big', justify='center')
-        self.is_paused = True
+        self._timer_repo = TimerRepository()
+        self._session_repo = SessionRepository()
+        self._timer_repo.ensure_default_exists()
 
-    def _generate_pomodoro_sequence(self, timer_data):
-        if not timer_data:
-            return []
-        session_len = timer_data['session_length'] * 60
-        short_break_len = timer_data['short_break'] * 60
-        long_break_len = timer_data['long_break'] * 60
-        short_per_long = timer_data['short_per_long'] + 1
-        total_sessions = timer_data['total_sessions']
+        self._timer_configs = self._timer_repo.get_all()
+        self._current_timer_id: Optional[int] = self._timer_configs[0].id if self._timer_configs else None
+        self._current_session_id: Optional[int] = None
 
-        sequence = []
-        sessions_done = 0
-        while sessions_done < total_sessions:
-            sequence.append(("Pomodoro", session_len))
-            sessions_done += 1
-            if sessions_done % short_per_long == 0 and sessions_done < total_sessions:
-                sequence.append(("Long Break", long_break_len))
-            elif sessions_done < total_sessions:
-                sequence.append(("Short Break", short_break_len))
-        return sequence
+        # Initialize the pomodoro timer
+        if self._current_timer_id:
+            config = self._timer_repo.get_by_id(self._current_timer_id)
+            self._pomo_timer = PomodoroTimer(config)
+        else:
+            self._pomo_timer = None
+
+        self._ui_timer = None
+        self.figlet = Figlet(font="big", justify="center")
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
-        timers = [(timer['name'], timer['id']) for timer in self.timers]
+        timers = [(t.name, t.id) for t in self._timer_configs]
         timers.append(("Add new timer...", "add_new_timer"))
-        yield Select(timers, id="timer-selector", value=self.current_timer_id)
+        yield Select(timers, id="timer-selector", value=self._current_timer_id)
         yield Static(id="timer")
         with Horizontal(id="buttons-container"):
-            yield Button("▶️", id="play-pause-button")
-            yield Button("⏩", id="fast-forward-button")
-            yield Button("🔄", id="restart-button")
-            yield Button("⚙️", id="settings-button")
-            yield Button("✏️", id="edit-timer-button")
+            yield Button("\u25b6\ufe0f", id="play-pause-button")
+            yield Button("\u23e9", id="fast-forward-button")
+            yield Button("\U0001f504", id="restart-button")
+            yield Button("\u2699\ufe0f", id="settings-button")
+            yield Button("\u270f\ufe0f", id="edit-timer-button")
 
     def on_mount(self) -> None:
         """Event handler called when the app is mounted."""
-        self.update_timer_class()
-        self.update_timer_display()
-        self._timer = self.set_interval(1, self.tick)
-        self._timer.pause()
+        self._update_timer_class()
+        self._update_timer_display()
+        self._ui_timer = self.set_interval(1, self._tick)
+        self._ui_timer.pause()
 
     def refresh_timers(self, new_current_timer_id: Optional[int] = None) -> None:
         """Refresh the timers in the select."""
-        self.timers = get_all_timers()
+        self._timer_configs = self._timer_repo.get_all()
         select = self.query_one(Select)
-        timers = [(timer['name'], timer['id']) for timer in self.timers]
+        timers = [(t.name, t.id) for t in self._timer_configs]
         timers.append(("Add new timer...", "add_new_timer"))
         select.set_options(timers)
+
         if new_current_timer_id is None:
-            if self.timers:
-                self.current_timer_id = self.timers[0]['id']
-            else:
-                self.current_timer_id = None
+            self._current_timer_id = self._timer_configs[0].id if self._timer_configs else None
         else:
-            self.current_timer_id = new_current_timer_id
+            self._current_timer_id = new_current_timer_id
 
-        select.value = self.current_timer_id
+        select.value = self._current_timer_id
+        self._current_session_id = None
 
-        self.current_session_id = None  # Reset session on timer change
-        selected_timer_data = get_timer_by_id(self.current_timer_id) if self.current_timer_id else None
-        self.POMODORO_SEQUENCE = self._generate_pomodoro_sequence(selected_timer_data)
-        self.sequence_index = 0
-        self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
-        self._timer.pause()
-        self.query_one("#play-pause-button", Button).label = "▶️"
-        self.is_paused = True
-        self.update_timer_class()
-        self.update_timer_display()
+        if self._current_timer_id:
+            config = self._timer_repo.get_by_id(self._current_timer_id)
+            self._pomo_timer = PomodoroTimer(config)
+        else:
+            self._pomo_timer = None
+
+        self._ui_timer.pause()
+        self.query_one("#play-pause-button", Button).label = "\u25b6\ufe0f"
+        self._update_timer_class()
+        self._update_timer_display()
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.value == Select.BLANK:
             return
         if event.value == "add_new_timer":
-            self.push_screen(TimerFormScreen())
+            self.push_screen(TimerFormScreen(self._timer_repo))
         else:
-            self.current_timer_id = event.value
-            self.current_session_id = None  # Reset session on timer change
-            selected_timer_data = get_timer_by_id(self.current_timer_id)
-            self.POMODORO_SEQUENCE = self._generate_pomodoro_sequence(selected_timer_data)
-            self.sequence_index = 0
-            self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
-            self._timer.pause()
-            self.query_one("#play-pause-button", Button).label = "▶️"
-            self.is_paused = True
-            self.update_timer_class()
-            self.update_timer_display()
-
-    def add_new_timer(self, name, session_length, short_break, long_break, short_per_long, total_sessions):
-        add_timer(name, int(session_length), int(short_break), int(long_break), int(short_per_long), int(total_sessions))
-        self.refresh_timers()
-        self.pop_screen()
-
-    def _get_completed_counts(self):
-        sessions = 0
-        short_breaks = 0
-        long_breaks = 0
-        for i in range(self.sequence_index):
-            event_name, _ = self.POMODORO_SEQUENCE[i]
-            if event_name == "Pomodoro":
-                sessions += 1
-            elif event_name == "Short Break":
-                short_breaks += 1
-            elif event_name == "Long Break":
-                long_breaks += 1
-        return sessions, short_breaks, long_breaks
+            self._current_timer_id = event.value
+            self._current_session_id = None
+            config = self._timer_repo.get_by_id(self._current_timer_id)
+            self._pomo_timer = PomodoroTimer(config)
+            self._ui_timer.pause()
+            self.query_one("#play-pause-button", Button).label = "\u25b6\ufe0f"
+            self._update_timer_class()
+            self._update_timer_display()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Event handler called when the button is pressed."""
         if event.button.id == "play-pause-button":
-            if self.is_paused:
-                self._timer.resume()
-                event.button.label = "⏸️"
-                if self.current_session_id is None:
-                    self.current_session_id = create_session(self.current_timer_id)
-                else:
-                    sessions, short_breaks, long_breaks = self._get_completed_counts()
-                    update_session(self.current_session_id, None, sessions, short_breaks, long_breaks)
-            else:
-                self._timer.pause()
-                event.button.label = "▶️"
-                sessions, short_breaks, long_breaks = self._get_completed_counts()
-                stop_time = datetime.datetime.now().isoformat()
-                update_session(self.current_session_id, stop_time, sessions, short_breaks, long_breaks)
-            self.is_paused = not self.is_paused
+            self._handle_play_pause(event.button)
         elif event.button.id == "fast-forward-button":
-            self.skip_session()
+            self._skip_session()
         elif event.button.id == "restart-button":
-            self.restart_current_timer()
+            self._restart_current_timer()
         elif event.button.id == "settings-button":
-            self.push_screen(SessionLogScreen())
+            self.push_screen(SessionLogScreen(self._session_repo))
         elif event.button.id == "edit-timer-button":
-            if self.current_timer_id:
-                self.push_screen(EditTimerScreen(self.current_timer_id))
+            if self._current_timer_id:
+                config = self._timer_repo.get_by_id(self._current_timer_id)
+                self.push_screen(EditTimerScreen(config, self._timer_repo))
 
-    def restart_current_timer(self):
+    def _handle_play_pause(self, button: Button) -> None:
+        """Handle play/pause button press."""
+        if not self._pomo_timer:
+            return
+
+        if not self._pomo_timer.is_running:
+            self._pomo_timer.start()
+            self._ui_timer.resume()
+            button.label = "\u23f8\ufe0f"
+            if self._current_session_id is None:
+                self._current_session_id = self._session_repo.create(self._current_timer_id)
+            else:
+                sessions, short_breaks, long_breaks = self._pomo_timer.get_completed_counts()
+                self._session_repo.update(self._current_session_id, None, sessions, short_breaks, long_breaks)
+        else:
+            self._pomo_timer.pause()
+            self._ui_timer.pause()
+            button.label = "\u25b6\ufe0f"
+            sessions, short_breaks, long_breaks = self._pomo_timer.get_completed_counts()
+            stop_time = datetime.datetime.now().isoformat()
+            self._session_repo.update(self._current_session_id, stop_time, sessions, short_breaks, long_breaks)
+
+    def _restart_current_timer(self) -> None:
         """Resets the current timer to its starting state."""
-        self._timer.pause()
-        self.is_paused = True
-        self.query_one("#play-pause-button", Button).label = "▶️"
-        self.sequence_index = 0
-        self.current_session_id = None
-        self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
-        self.update_timer_class()
-        self.update_timer_display()
+        if not self._pomo_timer:
+            return
 
-    def skip_session(self, play_sound: bool = False):
+        self._pomo_timer.restart()
+        self._ui_timer.pause()
+        self.query_one("#play-pause-button", Button).label = "\u25b6\ufe0f"
+        self._current_session_id = None
+        self._update_timer_class()
+        self._update_timer_display()
+
+    def _skip_session(self, play_sound: bool = False) -> None:
         """Skips the current session."""
+        if not self._pomo_timer:
+            return
+
         if play_sound:
             sound_file = ASSETS_DIR / "meow.mp3"
             playsound(str(sound_file))
-        self.sequence_index += 1
-        if self.sequence_index < len(self.POMODORO_SEQUENCE):
-            self.remaining_time = self.POMODORO_SEQUENCE[self.sequence_index][1]
-            self.update_timer_class()
-            if self.current_session_id is not None:
-                sessions, short_breaks, long_breaks = self._get_completed_counts()
-                update_session(self.current_session_id, None, sessions, short_breaks, long_breaks)
-            self.update_timer_display()
+
+        has_more = self._pomo_timer.skip()
+
+        if has_more:
+            self._update_timer_class()
+            if self._current_session_id is not None:
+                sessions, short_breaks, long_breaks = self._pomo_timer.get_completed_counts()
+                self._session_repo.update(self._current_session_id, None, sessions, short_breaks, long_breaks)
+            self._update_timer_display()
         else:
-            self._timer.pause()
-            if self.current_session_id is not None:
-                sessions, short_breaks, long_breaks = self._get_completed_counts()
+            # Sequence complete
+            self._ui_timer.pause()
+            if self._current_session_id is not None:
+                sessions, short_breaks, long_breaks = self._pomo_timer.get_completed_counts()
                 stop_time = datetime.datetime.now().isoformat()
-                update_session(self.current_session_id, stop_time, sessions, short_breaks, long_breaks)
+                self._session_repo.update(self._current_session_id, stop_time, sessions, short_breaks, long_breaks)
 
-            self.sequence_index = 0
-            self.remaining_time = self.POMODORO_SEQUENCE[0][1] if self.POMODORO_SEQUENCE else 0
-            self.is_paused = True
-            self.query_one("#play-pause-button", Button).label = "▶️"
-            self.current_session_id = None
-            self.update_timer_class()
-            self.update_timer_display()
+            self.query_one("#play-pause-button", Button).label = "\u25b6\ufe0f"
+            self._current_session_id = None
+            self._update_timer_class()
+            self._update_timer_display()
 
-    def tick(self) -> None:
+    def _tick(self) -> None:
         """Called every second to update the timer."""
-        self.remaining_time -= 1
-        if self.remaining_time < 0:
-            self.skip_session(play_sound=True)
+        if not self._pomo_timer:
             return
-        self.update_timer_display()
 
-    def update_timer_class(self) -> None:
+        phase_changed = self._pomo_timer.tick()
+        if phase_changed:
+            self._skip_session(play_sound=True)
+            return
+        self._update_timer_display()
+
+    def _update_timer_class(self) -> None:
         """Update the timer's CSS class based on the current session."""
-        name, _ = self.POMODORO_SEQUENCE[self.sequence_index]
-        timer = self.query_one("#timer")
-        if "Break" in name:
-            timer.remove_class("pomodoro")
-            timer.add_class("break")
-        else:
-            timer.remove_class("break")
-            timer.add_class("pomodoro")
+        if not self._pomo_timer:
+            return
 
-    def update_timer_display(self) -> None:
+        timer_widget = self.query_one("#timer")
+        if self._pomo_timer.is_break:
+            timer_widget.remove_class("pomodoro")
+            timer_widget.add_class("break")
+        else:
+            timer_widget.remove_class("break")
+            timer_widget.add_class("pomodoro")
+
+    def _update_timer_display(self) -> None:
         """Update the timer display."""
-        if self.sequence_index < len(self.POMODORO_SEQUENCE):
-            name, _ = self.POMODORO_SEQUENCE[self.sequence_index]
-            minutes, seconds = divmod(self.remaining_time, 60)
-            timer_str = f"{minutes:02d}:{seconds:02d}"
-            self.figlet.width = self.console.width
-            self.query_one("#timer", Static).update(self.figlet.renderText(timer_str))
+        if not self._pomo_timer:
+            return
+
+        minutes, seconds = divmod(self._pomo_timer.remaining_seconds, 60)
+        timer_str = f"{minutes:02d}:{seconds:02d}"
+        self.figlet.width = self.console.width
+        self.query_one("#timer", Static).update(self.figlet.renderText(timer_str))
