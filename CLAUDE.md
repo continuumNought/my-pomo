@@ -9,15 +9,13 @@ My-Pomo is a free and open-source Pomodoro timer with a TUI (Text User Interface
 ## Commands
 
 ```bash
-# Setup
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+# Setup & sync dependencies
+uv sync
 
 # Run the app
-my-pomo
+uv run my-pomo
 # or
-python -m my_pomo
+uv run python -m my_pomo
 ```
 
 ## Project Structure
@@ -34,7 +32,7 @@ my-pomo/
 │           └── meow.mp3     # Audio notification sound
 ├── tests/                   # Test directory
 ├── pyproject.toml           # Package configuration
-├── requirements.txt         # Legacy requirements
+├── uv.lock                  # uv lock file
 └── README.md
 ```
 

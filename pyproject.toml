@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "my-pomo"
@@ -34,8 +34,14 @@ my-pomo = "my_pomo.__main__:main"
 [project.urls]
 Homepage = "https://github.com/yourusername/my-pomo"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/my_pomo"]
 
-[tool.setuptools.package-data]
-my_pomo = ["assets/*.mp3"]
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+
+[tool.hatch.build]
+include = [
+    "src/my_pomo/**/*.py",
+    "src/my_pomo/assets/*.mp3",
+]
