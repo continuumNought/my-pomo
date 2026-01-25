@@ -179,9 +179,10 @@ class PomoApp(App):
         with Horizontal(id="buttons-container"):
             yield Button("\u25b6\ufe0f", id="play-pause-button")
             yield Button("\u23e9", id="fast-forward-button")
-            yield Button("\U0001f504", id="restart-button")
-            yield Button("\u2699\ufe0f", id="settings-button")
+            yield Button("\u23f9\ufe0f", id="stop-button")
             yield Button("\u270f\ufe0f", id="edit-timer-button")
+            yield Button("\u2699\ufe0f", id="settings-button")
+            yield Button("\u274c", id="quit-button")
 
     def on_mount(self) -> None:
         """Event handler called when the app is mounted."""
@@ -238,7 +239,7 @@ class PomoApp(App):
             self._handle_play_pause(event.button)
         elif event.button.id == "fast-forward-button":
             self._skip_session()
-        elif event.button.id == "restart-button":
+        elif event.button.id == "stop-button":
             self._restart_current_timer()
         elif event.button.id == "settings-button":
             self.push_screen(SessionLogScreen(self._session_repo))
@@ -246,6 +247,8 @@ class PomoApp(App):
             if self._current_timer_id:
                 config = self._timer_repo.get_by_id(self._current_timer_id)
                 self.push_screen(EditTimerScreen(config, self._timer_repo))
+        elif event.button.id == "quit-button":
+            self.exit()
 
     def _handle_play_pause(self, button: Button) -> None:
         """Handle play/pause button press."""
