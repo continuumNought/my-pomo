@@ -318,8 +318,26 @@ class PomoApp(App):
 
         phase_changed = self._pomo_timer.tick()
         if phase_changed:
-            self._skip_session(play_sound=True)
-            return
+            # Play sound on phase change
+            sound_file = ASSETS_DIR / "meow.mp3"
+            playsound(str(sound_file))
+
+            # Update session stats
+            if self._current_session_id is not None:
+                sessions, short_breaks, long_breaks = self._pomo_timer.get_completed_counts()
+                self._session_repo.update(self._current_session_id, None, sessions, short_breaks, long_breaks)
+
+            # Check if sequence complete
+            if self._pomo_timer.is_complete or not self._pomo_timer.is_running:
+                self._ui_timer.pause()
+                if self._current_session_id is not None:
+                    sessions, short_breaks, long_breaks = self._pomo_timer.get_completed_counts()
+                    stop_time = datetime.datetime.now().isoformat()
+                    self._session_repo.update(self._current_session_id, stop_time, sessions, short_breaks, long_breaks)
+                self.query_one("#play-pause-button", Button).label = "\u25b6\ufe0f"
+                self._current_session_id = None
+
+            self._update_timer_class()
         self._update_timer_display()
 
     def _update_timer_class(self) -> None:
