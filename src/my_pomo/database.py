@@ -1,144 +1,188 @@
-import sqlite3
+"""SQLAlchemy database layer for the Pomodoro timer."""
+
 import datetime
 from pathlib import Path
+from typing import Optional
 
-# Store database in user's data directory or alongside the package
-DB_NAME = Path.home() / ".my_pomo" / "timers.db"
-
-
-def _ensure_db_dir():
-    DB_NAME.parent.mkdir(parents=True, exist_ok=True)
+from sqlalchemy import create_engine, String, Integer, ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, Session
 
 
-def get_db_connection():
+# Store database in user's data directory
+DB_PATH = Path.home() / ".my_pomo" / "timers.db"
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Timer(Base):
+    """SQLAlchemy model for timer configurations."""
+
+    __tablename__ = "timers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    session_length: Mapped[int] = mapped_column(Integer, nullable=False)
+    short_break: Mapped[int] = mapped_column(Integer, nullable=False)
+    long_break: Mapped[int] = mapped_column(Integer, nullable=False)
+    short_per_long: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_sessions: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class PomodoroSession(Base):
+    """SQLAlchemy model for completed pomodoro sessions."""
+
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    timer_id: Mapped[int] = mapped_column(ForeignKey("timers.id"), nullable=False)
+    start_timestamp: Mapped[str] = mapped_column(String, nullable=False)
+    stop_timestamp: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    sessions_completed: Mapped[int] = mapped_column(Integer, default=0)
+    short_breaks_completed: Mapped[int] = mapped_column(Integer, default=0)
+    long_breaks_completed: Mapped[int] = mapped_column(Integer, default=0)
+
+
+def _ensure_db_dir() -> None:
+    """Ensure the database directory exists."""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+
+def get_engine():
+    """Get the SQLAlchemy engine."""
     _ensure_db_dir()
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return create_engine(f"sqlite:///{DB_PATH}")
 
 
-def create_tables():
-    conn = get_db_connection()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS timers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            session_length INTEGER NOT NULL,
-            short_break INTEGER NOT NULL,
-            long_break INTEGER NOT NULL,
-            short_per_long INTEGER NOT NULL,
-            total_sessions INTEGER NOT NULL
+def get_session_factory() -> sessionmaker[Session]:
+    """Get a session factory for creating database sessions."""
+    engine = get_engine()
+    return sessionmaker(bind=engine)
+
+
+def create_tables() -> None:
+    """Create all database tables."""
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+
+
+def add_timer(
+    name: str,
+    session_length: int,
+    short_break: int,
+    long_break: int,
+    short_per_long: int,
+    total_sessions: int,
+) -> None:
+    """Add a new timer configuration."""
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        # Check if timer with this name already exists
+        existing = session.query(Timer).filter_by(name=name).first()
+        if existing:
+            return
+        timer = Timer(
+            name=name,
+            session_length=session_length,
+            short_break=short_break,
+            long_break=long_break,
+            short_per_long=short_per_long,
+            total_sessions=total_sessions,
         )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timer_id INTEGER NOT NULL,
-            start_timestamp TEXT NOT NULL,
-            stop_timestamp TEXT,
-            sessions_completed INTEGER DEFAULT 0,
-            short_breaks_completed INTEGER DEFAULT 0,
-            long_breaks_completed INTEGER DEFAULT 0,
-            FOREIGN KEY (timer_id) REFERENCES timers (id)
+        session.add(timer)
+        session.commit()
+
+
+def get_all_timers() -> list[Timer]:
+    """Get all timer configurations."""
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        timers = session.query(Timer).all()
+        # Detach from session so they can be used outside
+        session.expunge_all()
+        return timers
+
+
+def get_timer_by_id(timer_id: int) -> Optional[Timer]:
+    """Get a timer by ID."""
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        timer = session.query(Timer).filter_by(id=timer_id).first()
+        if timer:
+            session.expunge(timer)
+        return timer
+
+
+def update_timer(
+    timer_id: int,
+    name: str,
+    session_length: int,
+    short_break: int,
+    long_break: int,
+    short_per_long: int,
+    total_sessions: int,
+) -> None:
+    """Update an existing timer configuration."""
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        timer = session.query(Timer).filter_by(id=timer_id).first()
+        if timer:
+            timer.name = name
+            timer.session_length = session_length
+            timer.short_break = short_break
+            timer.long_break = long_break
+            timer.short_per_long = short_per_long
+            timer.total_sessions = total_sessions
+            session.commit()
+
+
+def delete_timer(timer_id: int) -> None:
+    """Delete a timer and its associated sessions."""
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        session.query(PomodoroSession).filter_by(timer_id=timer_id).delete()
+        session.query(Timer).filter_by(id=timer_id).delete()
+        session.commit()
+
+
+def create_session(timer_id: int) -> int:
+    """Create a new pomodoro session and return its ID."""
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        start_time = datetime.datetime.now().isoformat()
+        pomo_session = PomodoroSession(
+            timer_id=timer_id,
+            start_timestamp=start_time,
         )
-    """)
-    conn.commit()
-    conn.close()
+        session.add(pomo_session)
+        session.commit()
+        return pomo_session.id
 
 
-def add_timer(name, session_length, short_break, long_break, short_per_long, total_sessions):
-    conn = get_db_connection()
-    try:
-        conn.execute(
-            "INSERT INTO timers (name, session_length, short_break, long_break, short_per_long, total_sessions) VALUES (?, ?, ?, ?, ?, ?)",
-            (name, session_length, short_break, long_break, short_per_long, total_sessions)
-        )
-        conn.commit()
-    except sqlite3.IntegrityError:
-        # Timer with this name already exists
-        pass
-    finally:
-        conn.close()
+def update_session(
+    session_id: int,
+    stop_timestamp: Optional[str],
+    sessions_completed: int,
+    short_breaks_completed: int,
+    long_breaks_completed: int,
+) -> None:
+    """Update a pomodoro session's stats."""
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        pomo_session = session.query(PomodoroSession).filter_by(id=session_id).first()
+        if pomo_session:
+            pomo_session.stop_timestamp = stop_timestamp
+            pomo_session.sessions_completed = sessions_completed
+            pomo_session.short_breaks_completed = short_breaks_completed
+            pomo_session.long_breaks_completed = long_breaks_completed
+            session.commit()
 
 
-def get_all_timers():
-    conn = get_db_connection()
-    timers = conn.execute("SELECT * FROM timers").fetchall()
-    conn.close()
-    return timers
-
-
-def get_timer_by_id(timer_id):
-    conn = get_db_connection()
-    timer = conn.execute("SELECT * FROM timers WHERE id = ?", (timer_id,)).fetchone()
-    conn.close()
-    return timer
-
-
-def update_timer(timer_id, name, session_length, short_break, long_break, short_per_long, total_sessions):
-    conn = get_db_connection()
-    try:
-        conn.execute(
-            """
-            UPDATE timers
-            SET name = ?,
-                session_length = ?,
-                short_break = ?,
-                long_break = ?,
-                short_per_long = ?,
-                total_sessions = ?
-            WHERE id = ?
-            """,
-            (name, session_length, short_break, long_break, short_per_long, total_sessions, timer_id)
-        )
-        conn.commit()
-    except sqlite3.IntegrityError:
-        # Timer with this name already exists
-        pass
-    finally:
-        conn.close()
-
-
-def create_session(timer_id):
-    conn = get_db_connection()
-    start_time = datetime.datetime.now().isoformat()
-    cursor = conn.execute(
-        "INSERT INTO sessions (timer_id, start_timestamp) VALUES (?, ?)",
-        (timer_id, start_time)
-    )
-    session_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return session_id
-
-
-def update_session(session_id, stop_timestamp, sessions_completed, short_breaks_completed, long_breaks_completed):
-    conn = get_db_connection()
-    conn.execute(
-        """
-        UPDATE sessions
-        SET stop_timestamp = ?,
-            sessions_completed = ?,
-            short_breaks_completed = ?,
-            long_breaks_completed = ?
-        WHERE id = ?
-        """,
-        (stop_timestamp, sessions_completed, short_breaks_completed, long_breaks_completed, session_id)
-    )
-    conn.commit()
-    conn.close()
-
-
-def delete_timer(timer_id):
-    conn = get_db_connection()
-    conn.execute("DELETE FROM timers WHERE id = ?", (timer_id,))
-    conn.execute("DELETE FROM sessions WHERE timer_id = ?", (timer_id,))
-    conn.commit()
-    conn.close()
-
-
-def get_all_sessions():
-    conn = get_db_connection()
-    sessions = conn.execute("SELECT * FROM sessions").fetchall()
-    conn.close()
-    return sessions
+def get_all_sessions() -> list[PomodoroSession]:
+    """Get all pomodoro sessions."""
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        sessions = session.query(PomodoroSession).all()
+        session.expunge_all()
+        return sessions

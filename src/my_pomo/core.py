@@ -13,6 +13,8 @@ from my_pomo.database import (
     get_all_sessions,
     update_timer,
     delete_timer,
+    Timer,
+    PomodoroSession,
 )
 
 
@@ -29,18 +31,18 @@ class TimerConfig:
     total_sessions: int
 
     @classmethod
-    def from_db_row(cls, row) -> Optional["TimerConfig"]:
-        """Create a TimerConfig from a database row."""
-        if row is None:
+    def from_db_model(cls, timer: Optional[Timer]) -> Optional["TimerConfig"]:
+        """Create a TimerConfig from a SQLAlchemy Timer model."""
+        if timer is None:
             return None
         return cls(
-            id=row["id"],
-            name=row["name"],
-            session_length=row["session_length"],
-            short_break=row["short_break"],
-            long_break=row["long_break"],
-            short_per_long=row["short_per_long"],
-            total_sessions=row["total_sessions"],
+            id=timer.id,
+            name=timer.name,
+            session_length=timer.session_length,
+            short_break=timer.short_break,
+            long_break=timer.long_break,
+            short_per_long=timer.short_per_long,
+            total_sessions=timer.total_sessions,
         )
 
 
@@ -225,13 +227,13 @@ class TimerRepository:
 
     def get_all(self) -> list[TimerConfig]:
         """Get all timer configurations."""
-        rows = get_all_timers()
-        return [TimerConfig.from_db_row(row) for row in rows]
+        timers = get_all_timers()
+        return [TimerConfig.from_db_model(t) for t in timers]
 
     def get_by_id(self, timer_id: int) -> Optional[TimerConfig]:
         """Get a timer by ID."""
-        row = get_timer_by_id(timer_id)
-        return TimerConfig.from_db_row(row)
+        timer = get_timer_by_id(timer_id)
+        return TimerConfig.from_db_model(timer)
 
     def create(
         self,
@@ -293,16 +295,16 @@ class SessionRepository:
 
     def get_all(self) -> list[dict]:
         """Get all sessions as dictionaries."""
-        rows = get_all_sessions()
+        sessions = get_all_sessions()
         return [
             {
-                "id": row["id"],
-                "timer_id": row["timer_id"],
-                "start_timestamp": row["start_timestamp"],
-                "stop_timestamp": row["stop_timestamp"],
-                "sessions_completed": row["sessions_completed"],
-                "short_breaks_completed": row["short_breaks_completed"],
-                "long_breaks_completed": row["long_breaks_completed"],
+                "id": s.id,
+                "timer_id": s.timer_id,
+                "start_timestamp": s.start_timestamp,
+                "stop_timestamp": s.stop_timestamp,
+                "sessions_completed": s.sessions_completed,
+                "short_breaks_completed": s.short_breaks_completed,
+                "long_breaks_completed": s.long_breaks_completed,
             }
-            for row in rows
+            for s in sessions
         ]
