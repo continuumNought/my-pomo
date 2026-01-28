@@ -181,15 +181,16 @@ class PomodoroTimer:
     def _advance_phase(self) -> bool:
         """
         Advance to the next phase.
-        Returns True if phase changed, False if sequence complete.
+        Returns True if phase changed (including sequence completion).
+        On sequence completion, stops running but does NOT reset — caller
+        is responsible for calling restart() when ready.
         """
         if self._sequence.advance():
             self._remaining_seconds = self._sequence.current_phase()[1]
             return True
         else:
-            # Sequence complete, reset
-            self._sequence.reset()
-            self._remaining_seconds = self._sequence.current_phase()[1]
+            # Sequence complete — stop but don't reset
+            self._remaining_seconds = 0
             self._is_running = False
             return True
 

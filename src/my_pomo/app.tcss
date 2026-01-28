@@ -1,0 +1,21 @@
+Screen {
+    align: center middle;
+}
+#timer {
+    padding: 0;
+    margin-top: 8;
+}
+#timer.pomodoro {
+    color: yellow;
+}
+#timer.break {
+    color: cyan;
+}
+#play-pause-button {
+    color: white;
+}
+#buttons-container {
+    width: 100%;
+    align: center middle;
+    margin-top: 1;
+}
