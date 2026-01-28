@@ -72,13 +72,31 @@ class TimerFormScreen(Screen):
 
     @on(Button.Pressed, "#save_timer")
     def handle_save(self, event: Button.Pressed) -> None:
-        name = self.query_one("#name", Input).value
-        session_length = int(self.query_one("#session_length", Input).value)
-        short_break = int(self.query_one("#short_break", Input).value)
-        long_break = int(self.query_one("#long_break", Input).value)
-        short_per_long = int(self.query_one("#short_per_long", Input).value)
-        total_sessions = int(self.query_one("#total_sessions", Input).value)
-        self._timer_repo.create(name, session_length, short_break, long_break, short_per_long, total_sessions)
+        name = self.query_one("#name", Input).value.strip()
+        if not name:
+            self.notify("Timer name is required", severity="error")
+            self.query_one("#name", Input).focus()
+            return
+
+        numeric_fields = ["session_length", "short_break", "long_break", "short_per_long", "total_sessions"]
+        for field_id in numeric_fields:
+            inp = self.query_one(f"#{field_id}", Input)
+            try:
+                int(inp.value)
+            except (ValueError, TypeError):
+                self.notify(f"{inp.placeholder} must be a valid integer", severity="error")
+                inp.focus()
+                return
+
+        self._timer_repo.create(
+            name,
+            int(self.query_one("#session_length", Input).value),
+            int(self.query_one("#short_break", Input).value),
+            int(self.query_one("#long_break", Input).value),
+            int(self.query_one("#short_per_long", Input).value),
+            int(self.query_one("#total_sessions", Input).value),
+        )
+        self.notify(f"Timer '{name}' created")
         self.dismiss(True)
 
 
@@ -104,9 +122,25 @@ class EditTimerScreen(Screen):
 
     @on(Button.Pressed, "#save_timer")
     def handle_save(self, event: Button.Pressed) -> None:
+        name = self.query_one("#name", Input).value.strip()
+        if not name:
+            self.notify("Timer name is required", severity="error")
+            self.query_one("#name", Input).focus()
+            return
+
+        numeric_fields = ["session_length", "short_break", "long_break", "short_per_long", "total_sessions"]
+        for field_id in numeric_fields:
+            inp = self.query_one(f"#{field_id}", Input)
+            try:
+                int(inp.value)
+            except (ValueError, TypeError):
+                self.notify(f"{inp.placeholder} must be a valid integer", severity="error")
+                inp.focus()
+                return
+
         updated_config = TimerConfig(
             id=self._timer_config.id,
-            name=self.query_one("#name", Input).value,
+            name=name,
             session_length=int(self.query_one("#session_length", Input).value),
             short_break=int(self.query_one("#short_break", Input).value),
             long_break=int(self.query_one("#long_break", Input).value),
@@ -114,11 +148,13 @@ class EditTimerScreen(Screen):
             total_sessions=int(self.query_one("#total_sessions", Input).value),
         )
         self._timer_repo.update(updated_config)
+        self.notify(f"Timer '{name}' updated")
         self.dismiss(("saved", self._timer_config.id))
 
     @on(Button.Pressed, "#delete_timer")
     def handle_delete(self, event: Button.Pressed) -> None:
         self._timer_repo.delete(self._timer_config.id)
+        self.notify(f"Timer '{self._timer_config.name}' deleted")
         self.dismiss(("deleted", None))
 
     @on(Button.Pressed, "#back")
@@ -201,12 +237,8 @@ class PomoApp(App):
             timer_widget = self.query_one("#timer")
         except Exception:
             return
-        if on_break:
-            timer_widget.remove_class("pomodoro")
-            timer_widget.add_class("break")
-        else:
-            timer_widget.remove_class("break")
-            timer_widget.add_class("pomodoro")
+        timer_widget.set_class(on_break, "break")
+        timer_widget.set_class(not on_break, "pomodoro")
 
     def watch_remaining_seconds(self, seconds: int) -> None:
         """Render the figlet text when remaining seconds changes."""
@@ -225,10 +257,12 @@ class PomoApp(App):
             self.is_paused = not self._pomo_timer.is_running
             self.is_break = self._pomo_timer.is_break
             self.remaining_seconds = self._pomo_timer.remaining_seconds
+            self.sub_title = self._pomo_timer.config.name
         else:
             self.is_paused = True
             self.is_break = False
             self.remaining_seconds = 0
+            self.sub_title = ""
 
     def refresh_timers(self, new_current_timer_id: Optional[int] = None) -> None:
         """Refresh the timers in the select."""
@@ -402,6 +436,7 @@ class PomoApp(App):
                     stop_time = datetime.datetime.now().isoformat()
                     self._session_repo.update(self._current_session_id, stop_time, sessions, short_breaks, long_breaks)
                 self._current_session_id = None
+                self.notify("Pomodoro sequence complete!")
                 self._restart_current_timer()
                 return
 
