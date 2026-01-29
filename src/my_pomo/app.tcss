@@ -1,9 +1,12 @@
 Screen {
     align: center middle;
 }
+#timer-selector {
+    dock: top;
+}
 #timer {
     padding: 0;
-    margin-top: 8;
+    margin-top: 2;
 }
 #timer.pomodoro {
     color: yellow;
