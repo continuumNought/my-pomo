@@ -170,6 +170,7 @@ class PomoApp(App):
     BINDINGS = [
         ("p", "play_pause", "Play/Pause"),
         ("s", "skip", "Skip"),
+        ("w", "rewind", "Rewind"),
         ("r", "restart", "Restart"),
         ("e", "edit", "Edit"),
         ("l", "session_log", "Log"),
@@ -312,6 +313,11 @@ class PomoApp(App):
 
     def action_skip(self) -> None:
         self._skip_session()
+
+    def action_rewind(self) -> None:
+        if self._pomo_timer and self._pomo_timer.rewind():
+            self._ui_timer.pause()
+            self._sync_reactive_from_timer()
 
     def action_restart(self) -> None:
         self._restart_current_timer()

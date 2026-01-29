@@ -84,6 +84,13 @@ class PomodoroSequence:
         self._index += 1
         return self._index < len(self._sequence)
 
+    def retreat(self) -> bool:
+        """Go back to the previous phase. Returns False if already at the first phase."""
+        if self._index <= 0:
+            return False
+        self._index -= 1
+        return True
+
     def reset(self) -> None:
         """Reset to the beginning of the sequence."""
         self._index = 0
@@ -214,6 +221,28 @@ class PomodoroTimer:
         self._sequence.reset()
         self._remaining_seconds = self._sequence.current_phase()[1]
         self._is_running = False
+
+    def rewind(self) -> bool:
+        """Rewind the timer.
+
+        - If running or clock != phase initial: reset clock to initial, pause.
+        - If paused at initial value: go back to previous phase.
+        - If paused at initial value on the first phase: do nothing.
+
+        Returns True if state changed.
+        """
+        current_duration = self._sequence.current_phase()[1]
+
+        if self._is_running or self._remaining_seconds != current_duration:
+            self._remaining_seconds = current_duration
+            self._is_running = False
+            return True
+
+        if self._sequence.retreat():
+            self._remaining_seconds = self._sequence.current_phase()[1]
+            return True
+
+        return False
 
     def get_completed_counts(self) -> tuple[int, int, int]:
         """Get counts of completed sessions, short breaks, and long breaks."""
