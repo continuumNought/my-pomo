@@ -168,13 +168,14 @@ class PomoApp(App):
     CSS_PATH = "app.tcss"
     TITLE = "My Pomo"
     BINDINGS = [
-        ("space", "play_pause", "Play/Pause"),
+        ("p", "play_pause", "Play/Pause"),
         ("s", "skip", "Skip"),
         ("r", "restart", "Restart"),
+        ("e", "edit", "Edit"),
+        ("l", "session_log", "Log"),
         ("q", "quit", "Quit"),
     ]
 
-    is_paused: reactive[bool] = reactive(True)
     is_break: reactive[bool] = reactive(False)
     remaining_seconds: reactive[int] = reactive(0)
 
@@ -186,15 +187,10 @@ class PomoApp(App):
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
+        yield Header()
         yield Select([], id="timer-selector")
         yield Static(id="timer")
-        with Horizontal(id="buttons-container"):
-            yield Button("\u25b6\ufe0f", id="play-pause-button")
-            yield Button("\u23e9", id="fast-forward-button")
-            yield Button("\u23f9\ufe0f", id="stop-button")
-            yield Button("\u270f\ufe0f", id="edit-timer-button")
-            yield Button("\u2699\ufe0f", id="settings-button")
-            yield Button("\u274c", id="quit-button")
+        yield Footer()
 
     def on_mount(self) -> None:
         """Event handler called when the app is mounted."""
@@ -223,14 +219,6 @@ class PomoApp(App):
         self._ui_timer = self.set_interval(1, self._tick)
         self._ui_timer.pause()
 
-    def watch_is_paused(self, paused: bool) -> None:
-        """Update the play/pause button label when paused state changes."""
-        try:
-            button = self.query_one("#play-pause-button", Button)
-        except Exception:
-            return
-        button.label = "\u25b6\ufe0f" if paused else "\u23f8\ufe0f"
-
     def watch_is_break(self, on_break: bool) -> None:
         """Toggle CSS classes on the timer widget when break state changes."""
         try:
@@ -254,12 +242,10 @@ class PomoApp(App):
     def _sync_reactive_from_timer(self) -> None:
         """Sync all reactive attributes from the current PomodoroTimer state."""
         if self._pomo_timer:
-            self.is_paused = not self._pomo_timer.is_running
             self.is_break = self._pomo_timer.is_break
             self.remaining_seconds = self._pomo_timer.remaining_seconds
             self.sub_title = self._pomo_timer.config.name
         else:
-            self.is_paused = True
             self.is_break = False
             self.remaining_seconds = 0
             self.sub_title = ""
@@ -322,42 +308,21 @@ class PomoApp(App):
             self._sync_reactive_from_timer()
 
     def action_play_pause(self) -> None:
-        """Action for the play/pause keybinding."""
         self._handle_play_pause()
 
     def action_skip(self) -> None:
-        """Action for the skip keybinding."""
         self._skip_session()
 
     def action_restart(self) -> None:
-        """Action for the restart keybinding."""
         self._restart_current_timer()
 
-    @on(Button.Pressed, "#play-pause-button")
-    def handle_play_pause_button(self, event: Button.Pressed) -> None:
-        self._handle_play_pause()
-
-    @on(Button.Pressed, "#fast-forward-button")
-    def handle_skip_button(self, event: Button.Pressed) -> None:
-        self._skip_session()
-
-    @on(Button.Pressed, "#stop-button")
-    def handle_stop_button(self, event: Button.Pressed) -> None:
-        self._restart_current_timer()
-
-    @on(Button.Pressed, "#settings-button")
-    def handle_settings_button(self, event: Button.Pressed) -> None:
-        self.push_screen(SessionLogScreen(self._session_repo), callback=self._on_session_log_closed)
-
-    @on(Button.Pressed, "#edit-timer-button")
-    def handle_edit_button(self, event: Button.Pressed) -> None:
+    def action_edit(self) -> None:
         if self._current_timer_id:
             config = self._timer_repo.get_by_id(self._current_timer_id)
             self.push_screen(EditTimerScreen(config, self._timer_repo), callback=self._on_edit_timer_closed)
 
-    @on(Button.Pressed, "#quit-button")
-    def handle_quit_button(self, event: Button.Pressed) -> None:
-        self.exit()
+    def action_session_log(self) -> None:
+        self.push_screen(SessionLogScreen(self._session_repo), callback=self._on_session_log_closed)
 
     def _handle_play_pause(self) -> None:
         """Handle play/pause toggle."""
@@ -367,7 +332,6 @@ class PomoApp(App):
         if not self._pomo_timer.is_running:
             self._pomo_timer.start()
             self._ui_timer.resume()
-            self.is_paused = False
             if self._current_session_id is None:
                 self._current_session_id = self._session_repo.create(self._current_timer_id)
             else:
@@ -376,7 +340,6 @@ class PomoApp(App):
         else:
             self._pomo_timer.pause()
             self._ui_timer.pause()
-            self.is_paused = True
             sessions, short_breaks, long_breaks = self._pomo_timer.get_completed_counts()
             stop_time = datetime.datetime.now().isoformat()
             self._session_repo.update(self._current_session_id, stop_time, sessions, short_breaks, long_breaks)

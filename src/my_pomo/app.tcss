@@ -11,9 +11,6 @@ Screen {
 #timer.break {
     color: cyan;
 }
-#play-pause-button {
-    color: white;
-}
 #buttons-container {
     width: 100%;
     align: center middle;
