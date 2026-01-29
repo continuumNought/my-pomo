@@ -3,6 +3,7 @@ from importlib.resources import files
 from typing import Optional
 
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.containers import Horizontal
@@ -168,10 +169,12 @@ class PomoApp(App):
     CSS_PATH = "app.tcss"
     TITLE = "My Pomo"
     BINDINGS = [
-        ("p", "play_pause", "Play/Pause"),
+        Binding("p", "play", "Play"),
+        Binding("p", "pause", "Pause"),
         ("s", "skip", "Skip"),
         ("w", "rewind", "Rewind"),
         ("r", "restart", "Restart"),
+        ("n", "new_timer", "New"),
         ("e", "edit", "Edit"),
         ("l", "session_log", "Log"),
         ("q", "quit", "Quit"),
@@ -185,11 +188,12 @@ class PomoApp(App):
         self.figlet = Figlet(font="big", justify="center")
         self._timer_repo = TimerRepository()
         self._session_repo = SessionRepository()
+        self._pomo_timer = None
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         yield Header()
-        yield Select([], id="timer-selector")
+        yield Select([], id="timer-selector", prompt="Timer")
         yield Static(id="timer")
         yield Footer()
 
@@ -204,7 +208,6 @@ class PomoApp(App):
         # Populate the select widget
         select = self.query_one(Select)
         timers = [(t.name, t.id) for t in self._timer_configs]
-        timers.append(("Add new timer...", "add_new_timer"))
         select.set_options(timers)
         select.value = self._current_timer_id
 
@@ -250,13 +253,13 @@ class PomoApp(App):
             self.is_break = False
             self.remaining_seconds = 0
             self.sub_title = ""
+        self.refresh_bindings()
 
     def refresh_timers(self, new_current_timer_id: Optional[int] = None) -> None:
         """Refresh the timers in the select."""
         self._timer_configs = self._timer_repo.get_all()
         select = self.query_one(Select)
         timers = [(t.name, t.id) for t in self._timer_configs]
-        timers.append(("Add new timer...", "add_new_timer"))
         select.set_options(timers)
 
         if new_current_timer_id is None:
@@ -298,17 +301,24 @@ class PomoApp(App):
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.value == Select.BLANK:
             return
-        if event.value == "add_new_timer":
-            self.push_screen(TimerFormScreen(self._timer_repo), callback=self._on_timer_form_closed)
-        else:
-            self._current_timer_id = event.value
-            self._current_session_id = None
-            config = self._timer_repo.get_by_id(self._current_timer_id)
-            self._pomo_timer = PomodoroTimer(config)
-            self._ui_timer.pause()
-            self._sync_reactive_from_timer()
+        self._current_timer_id = event.value
+        self._current_session_id = None
+        config = self._timer_repo.get_by_id(self._current_timer_id)
+        self._pomo_timer = PomodoroTimer(config)
+        self._ui_timer.pause()
+        self._sync_reactive_from_timer()
 
-    def action_play_pause(self) -> None:
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        if action == "play":
+            return not self._pomo_timer or not self._pomo_timer.is_running
+        if action == "pause":
+            return self._pomo_timer is not None and self._pomo_timer.is_running
+        return True
+
+    def action_play(self) -> None:
+        self._handle_play_pause()
+
+    def action_pause(self) -> None:
         self._handle_play_pause()
 
     def action_skip(self) -> None:
@@ -321,6 +331,9 @@ class PomoApp(App):
 
     def action_restart(self) -> None:
         self._restart_current_timer()
+
+    def action_new_timer(self) -> None:
+        self.push_screen(TimerFormScreen(self._timer_repo), callback=self._on_timer_form_closed)
 
     def action_edit(self) -> None:
         if self._current_timer_id:
@@ -349,6 +362,7 @@ class PomoApp(App):
             sessions, short_breaks, long_breaks = self._pomo_timer.get_completed_counts()
             stop_time = datetime.datetime.now().isoformat()
             self._session_repo.update(self._current_session_id, stop_time, sessions, short_breaks, long_breaks)
+        self.refresh_bindings()
 
     def _restart_current_timer(self) -> None:
         """Resets the current timer to its starting state."""

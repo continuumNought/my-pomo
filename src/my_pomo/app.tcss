@@ -3,6 +3,7 @@ Screen {
 }
 #timer-selector {
     dock: top;
+    margin: 1 2;
 }
 #timer {
     padding: 0;
