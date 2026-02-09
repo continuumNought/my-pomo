@@ -25,17 +25,26 @@ ASSETS_DIR = files("my_pomo").joinpath("assets")
 
 
 class SessionLogScreen(Screen):
+    """Screen displaying a table of completed pomodoro sessions."""
+
     def __init__(self, session_repo: SessionRepository) -> None:
+        """Initialize the session log screen.
+
+        Args:
+            session_repo: Repository for fetching session data.
+        """
         super().__init__()
         self._session_repo = session_repo
 
     def compose(self) -> ComposeResult:
+        """Create child widgets for the session log screen."""
         yield Header("Session Log")
         yield DataTable()
         yield Button("Back", id="back")
         yield Footer()
 
     def on_mount(self) -> None:
+        """Populate the data table with session history when the screen is mounted."""
         table = self.query_one(DataTable)
         table.add_columns("ID", "Timer ID", "Start", "Stop", "Sessions", "Short Breaks", "Long Breaks")
         sessions = self._session_repo.get_all()
@@ -52,15 +61,24 @@ class SessionLogScreen(Screen):
 
     @on(Button.Pressed, "#back")
     def handle_back(self, event: Button.Pressed) -> None:
+        """Dismiss the screen when the back button is pressed."""
         self.dismiss()
 
 
 class TimerFormScreen(Screen):
+    """Screen for creating a new timer configuration."""
+
     def __init__(self, timer_repo: TimerRepository) -> None:
+        """Initialize the timer form screen.
+
+        Args:
+            timer_repo: Repository for persisting timer configurations.
+        """
         super().__init__()
         self._timer_repo = timer_repo
 
     def compose(self) -> ComposeResult:
+        """Create the form widgets for timer configuration."""
         yield Header("Add New Timer")
         yield Input(placeholder="Timer Name", id="name")
         yield Input(placeholder="Session Length (minutes)", id="session_length", validators=[Integer()])
@@ -73,6 +91,7 @@ class TimerFormScreen(Screen):
 
     @on(Button.Pressed, "#save_timer")
     def handle_save(self, event: Button.Pressed) -> None:
+        """Validate form inputs and save the new timer configuration."""
         name = self.query_one("#name", Input).value.strip()
         if not name:
             self.notify("Timer name is required", severity="error")
@@ -102,12 +121,21 @@ class TimerFormScreen(Screen):
 
 
 class EditTimerScreen(Screen):
+    """Screen for editing or deleting an existing timer configuration."""
+
     def __init__(self, timer_config: TimerConfig, timer_repo: TimerRepository) -> None:
+        """Initialize the edit timer screen.
+
+        Args:
+            timer_config: The timer configuration to edit.
+            timer_repo: Repository for persisting timer configurations.
+        """
         super().__init__()
         self._timer_config = timer_config
         self._timer_repo = timer_repo
 
     def compose(self) -> ComposeResult:
+        """Create the form widgets pre-populated with the timer's current values."""
         yield Header(f"Edit Timer: {self._timer_config.name}")
         yield Input(value=self._timer_config.name, id="name")
         yield Input(value=str(self._timer_config.session_length), id="session_length", validators=[Integer()])
@@ -123,6 +151,7 @@ class EditTimerScreen(Screen):
 
     @on(Button.Pressed, "#save_timer")
     def handle_save(self, event: Button.Pressed) -> None:
+        """Validate form inputs and update the timer configuration."""
         name = self.query_one("#name", Input).value.strip()
         if not name:
             self.notify("Timer name is required", severity="error")
@@ -154,12 +183,14 @@ class EditTimerScreen(Screen):
 
     @on(Button.Pressed, "#delete_timer")
     def handle_delete(self, event: Button.Pressed) -> None:
+        """Delete the timer and dismiss the screen."""
         self._timer_repo.delete(self._timer_config.id)
         self.notify(f"Timer '{self._timer_config.name}' deleted")
         self.dismiss(("deleted", None))
 
     @on(Button.Pressed, "#back")
     def handle_back(self, event: Button.Pressed) -> None:
+        """Dismiss the screen without saving changes."""
         self.dismiss(None)
 
 
@@ -184,6 +215,7 @@ class PomoApp(App):
     remaining_seconds: reactive[int] = reactive(0)
 
     def __init__(self):
+        """Initialize the Pomodoro app with repositories and figlet renderer."""
         super().__init__()
         self.figlet = Figlet(font="big", justify="center")
         self._timer_repo = TimerRepository()
@@ -299,6 +331,7 @@ class PomoApp(App):
         pass
 
     def on_select_changed(self, event: Select.Changed) -> None:
+        """Handle timer selection changes from the dropdown."""
         if event.value == Select.BLANK:
             return
         self._current_timer_id = event.value
@@ -309,6 +342,7 @@ class PomoApp(App):
         self._sync_reactive_from_timer()
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """Control which actions are enabled based on timer state."""
         if action == "play":
             return not self._pomo_timer or not self._pomo_timer.is_running
         if action == "pause":
@@ -316,31 +350,39 @@ class PomoApp(App):
         return True
 
     def action_play(self) -> None:
+        """Start the timer."""
         self._handle_play_pause()
 
     def action_pause(self) -> None:
+        """Pause the timer."""
         self._handle_play_pause()
 
     def action_skip(self) -> None:
+        """Skip to the next session or break."""
         self._skip_session()
 
     def action_rewind(self) -> None:
+        """Rewind to the previous session or reset the current one."""
         if self._pomo_timer and self._pomo_timer.rewind():
             self._ui_timer.pause()
             self._sync_reactive_from_timer()
 
     def action_restart(self) -> None:
+        """Restart the entire pomodoro sequence from the beginning."""
         self._restart_current_timer()
 
     def action_new_timer(self) -> None:
+        """Open the new timer form screen."""
         self.push_screen(TimerFormScreen(self._timer_repo), callback=self._on_timer_form_closed)
 
     def action_edit(self) -> None:
+        """Open the edit timer screen for the current timer."""
         if self._current_timer_id:
             config = self._timer_repo.get_by_id(self._current_timer_id)
             self.push_screen(EditTimerScreen(config, self._timer_repo), callback=self._on_edit_timer_closed)
 
     def action_session_log(self) -> None:
+        """Open the session log screen."""
         self.push_screen(SessionLogScreen(self._session_repo), callback=self._on_session_log_closed)
 
     def _handle_play_pause(self) -> None:

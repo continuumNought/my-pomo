@@ -4,6 +4,7 @@ from my_pomo.app import PomoApp
 
 
 def main():
+    """Run the My-Pomo application."""
     app = PomoApp()
     app.run()
 
